@@ -39,28 +39,29 @@ def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, 
     if iteration == total: 
         print()
 
+
 restore = False
 
 newx = 640 / 4 #480 / 4
 newy = 640 / 4
 
 # check if the checkpoints dir exist otherwise create it
-checkpoint_dir = '../checkpoints_small_' + str(newx) +  '_' + str(newy) + '/'
+checkpoint_dir = '../checkpoints_rec_onlyrec_1_lay' + str(newx) +  '_' + str(newy) + '/'
+old_checkpoint_dir = '../checkpoints_' + str(newx) +  '_' + str(newy) + '/'
 if not os.path.exists(checkpoint_dir):
     os.makedirs(checkpoint_dir)
 
 data_transforms = transforms.Compose([Rescale((newx, newy)),
                                       ToTensor()])
-#data_transforms = transforms.Compose([ToTensor()])
-train_dataset = YCBSegmentation(root_dir = '/media/nigno/data/YCB/', 
+train_dataset = YCBSegmentationH5(root_dir = '/media/nigno/data/YCB_h5/',
                                 transform = data_transforms,
                                 dset_type = 'train')
 
 print(len(train_dataset))
 train_size = len(train_dataset)
 
-dataloader_train = torch.utils.data.DataLoader(train_dataset, batch_size=150,
-                                               shuffle=True, num_workers=6)
+dataloader_train = torch.utils.data.DataLoader(train_dataset, batch_size=1,
+                                               shuffle=False, num_workers=1)
 
 
 
@@ -86,42 +87,41 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25, start_epo
         samples_count = 0
         print('reading data')
 
-        s_epoch = time.time()
         for data in dataloader_train:
             samples_count += 1
+            printProgressBar(samples_count, len(dataloader), prefix = 'train', suffix = 'Complete', length = 50)
             # get the inputs
             samples = data
-
+            
             # wrap them in Variable
             if torch.cuda.is_available():
                 inputs = Variable(samples['image'].cuda())
                 label = Variable(samples['label'].cuda())
+                init_h_temp = Variable(samples['startSeq'].cuda())
+                init_h = bool(sum(init_h_temp.data.cpu().numpy()))
             else:
-                inputs, label = Variable(samples['image']), Variable(samples['label'])
-            
+                inputs = Variable(samples['image'])
+                label = Variable(samples['label']),
+                init_h_temp = Variable(samples['startSeq'].cuda())
+                init_h = bool(sum(init_h_temp.data.numpy()))
+
             # zero the parameter gradients
             optimizer.zero_grad()
-            
+
             # forward
-            inputs /= 255
-            # normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-            #                      std=[0.229, 0.224, 0.225])
-            # inputs = normalize(inputs)
-            outputs = myNet(inputs)
-            loss = criterion(outputs, label) 
+            outputs = myNet(inputs, init_h) 
+            loss = criterion(outputs, label)  
 
             # backward + optimize only if in training phase
             loss.backward()
-            optimizer.step()
+            optimizer.step()  
 
             # statistics
             running_loss += loss.data
-            printProgressBar(samples_count, len(dataloader), prefix = 'train', suffix = 'Complete', length = 50)
 
         epoch_loss = running_loss / dataset_size 
 
         print('{} Loss: {:.7f}'.format('train', epoch_loss)) 
-        print('Time: ' + str((time.time() - s_epoch)))
 
         loss_list += [epoch_loss]
 
@@ -133,7 +133,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25, start_epo
                     'optimizer': optimizer.state_dict(),
                     }, checkpoint_dir + 'checkpointAllEpochs.tar' ) 
 
-        if ((epoch + start_epoch + 1) % 1) == 0:
+        if ((epoch + start_epoch + 1) % 10) == 0:
             torch.save({
                         'epoch': epoch + start_epoch + 1,
                         'state_dict': model.state_dict(),
@@ -147,18 +147,31 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25, start_epo
 
     return model
 
+oldNet = SegCNN()
+cpName = old_checkpoint_dir + 'checkpointAllEpochs.tar'
+if os.path.isfile(cpName):
+    print("=> loading checkpoint '{}'".format(cpName))
+    checkpoint = torch.load(cpName)
+    oldNet.load_state_dict(checkpoint['state_dict'])
+    print("=> loaded checkpoint (epoch {})"
+                .format(checkpoint['epoch']))
 
-myNet = SegCNNSimple()
+myNet = SegCNNRec(n_rec_layers = 1, hidden_sizes = [512], kernel_sizes = [3])
+#myNet.features = oldNet.features
+myNet.deconv22 = oldNet.deconv22
+myNet.deconv29 = oldNet.deconv29
+myNet.deconvFinal = oldNet.deconvFinal
+
+for param in myNet.features.parameters():
+    param.require_grad = False
+
 if torch.cuda.is_available():
     myNet = myNet.cuda()
 print (myNet)
 
-#for param in myNet.features.parameters():
-#    param.require_grad = False
-
 criterion = nn.CrossEntropyLoss()
-#params = list(myNet.deconv22.parameters()) + list(myNet.deconv29.parameters()) + list(myNet.deconvFinal.parameters())
-params = myNet.parameters()
+params = list(myNet.recurrent22.parameters()) + list(myNet.recurrent29.parameters())
+params_out = list(myNet.deconv22.parameters()) + list(myNet.deconv29.parameters()) + list(myNet.deconvFinal.parameters())
 optimizer_ft = optim.Adam(params)
 exp_lr_scheduler = None
 
