@@ -9,6 +9,23 @@ import cv2
 import h5py
 from PIL import Image
 
+class Normalize(object):
+    """Normalize the image in a sample to a given mean and variance.
+    """
+
+    def __init__(self, mean, std):
+        self.mean = mean
+        self.std = std
+
+    def __call__(self, sample):
+        image,label,startSeq = sample['image'], sample['label'], sample['startSeq']
+
+        for i in range(3):
+            image[:, :, i] = (image[:, :, i] - self.mean[i]) / self.std[i]
+
+        return {'image': image,
+                'label': label,
+                'startSeq': startSeq}
 
 class Rescale(object):
     """Rescale the image in a sample to a given size.
@@ -198,7 +215,7 @@ class YCBSegmentationH5(Dataset):
 class YCBSegmentationSeq(Dataset):
     """Segmentation dataset."""
 
-    def __init__(self, root_dir, transform=None, dset_type='train', seq_size=50):
+    def __init__(self, root_dir, transform=None, dset_type='train', seq_size=100):
         """
         Args:
             root_dir (string): Path to the dataset directory.
@@ -215,17 +232,16 @@ class YCBSegmentationSeq(Dataset):
         with open(data_list_file_name) as f:
             self.data_list = f.read().splitlines() 
         
-        self.chunks = [self.data_list[x:x+seq_size] for x in range(0, len(self.data_list), self.seq_size)]
+        self.chunks = [self.data_list[x:x+self.seq_size] for x in range(0, len(self.data_list), self.seq_size)]
         
-        count = 0
-        self.startSeq = np.ones(len(self.data_list), dtype=np.uint8)
-        for file_name in self.data_list:
-            seq = list(map(int, file_name.split('/')))
-            if seq[1] == 1:
-                self.startSeq[count] = 1
+        for ch in self.chunks:
+            if len(ch) == self.seq_size:
+                seq0 = list(map(int, ch[0].split('/')))
+                seq1 = list(map(int, ch[self.seq_size - 1].split('/')))
+                if seq0[0] == seq1[0]:
+                    self.chunks.remove(ch)
             else:
-                self.startSeq[count] = 0
-            count += 1
+                self.chunks.remove(ch)
 
         self.transform = transform
 
@@ -234,16 +250,35 @@ class YCBSegmentationSeq(Dataset):
         return dset_size
 
     def __getitem__(self, idx):
-        img_name = self.data_dir + self.data_list[idx] + '-color.png'
-        cv_image = cv2.imread(img_name)
-        image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
+        count = 0
+        for eleName in self.chunks[idx]:
+            img_name = self.data_dir + eleName + '-color.png'
+            cv_image = cv2.imread(img_name)
+            image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
 
-        label_name = self.data_dir + self.data_list[idx] + '-label.png'
-        label = cv2.imread(label_name, cv2.IMREAD_GRAYSCALE)
-        
-        sample = {'image': image, 'label': label, 'startSeq': self.startSeq[idx]}
+            label_name = self.data_dir + eleName + '-label.png'
+            label = cv2.imread(label_name, cv2.IMREAD_GRAYSCALE)
 
-        if self.transform:
-            sample = self.transform(sample)
+            if self.transform:
+                sampleTemp = {'image': image, 'label': label, 'startSeq': 1}
+                sampleTemp = self.transform(sampleTemp)
+                image, label, startSeq = sampleTemp['image'], sampleTemp['label'], sampleTemp['startSeq']
+                if count == 0:
+                    imageList = image[None, :, :, :]
+                    labelList = label[None, :, :]
+                else:
+                    imageList = torch.cat((imageList, image[None, :, :, :]))
+                    labelList = torch.cat((labelList, label[None, :, :]))
+            else:
+                if count == 0:
+                    imageList = image[None, :, :, :]
+                    labelList = label[None, :, :]
+                else:
+                    imageList = np.concatenate((imageList, image[None, :, :, :]))
+                    labelList = np.concatenate((labelList, label[None, :, :]))
+
+            count += 1
+
+        sample = {'image': imageList, 'label': labelList, 'startSeq': 1}
 
         return sample

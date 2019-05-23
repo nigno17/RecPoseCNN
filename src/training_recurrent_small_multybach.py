@@ -40,13 +40,15 @@ def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, 
         print()
 
 
-restore = False
+restore = True
 
 newx = 640 / 4 #480 / 4
 newy = 640 / 4
 
+seq_size = 50
+
 # check if the checkpoints dir exist otherwise create it
-checkpoint_dir = '../checkpoints_rec_1_lay_small_seq_finetuning' + str(newx) +  '_' + str(newy) + '/'
+checkpoint_dir = '../checkpoints_rec_1_lay_small_seq_scratch_' + str(newx) +  '_' + str(newy) + '/'
 old_checkpoint_dir = '../checkpoints_small_' + str(newx) +  '_' + str(newy) + '/'
 if not os.path.exists(checkpoint_dir):
     os.makedirs(checkpoint_dir)
@@ -55,12 +57,13 @@ data_transforms = transforms.Compose([Rescale((newx, newy)),
                                       ToTensor()])
 train_dataset = YCBSegmentationSeq(root_dir = '/media/nigno/data/YCB/',
                                 transform = data_transforms,
-                                dset_type = 'train')
+                                dset_type = 'train',
+                                seq_size = seq_size)
 
 print(len(train_dataset))
 train_size = len(train_dataset)
 
-dataloader_train = torch.utils.data.DataLoader(train_dataset, batch_size=1,
+dataloader_train = torch.utils.data.DataLoader(train_dataset, batch_size=3,
                                                shuffle=True, num_workers=6)
 
 
@@ -97,13 +100,9 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25, start_epo
             if torch.cuda.is_available():
                 inputs = Variable(samples['image'].cuda())
                 label = Variable(samples['label'].cuda())
-                init_h_temp = Variable(samples['startSeq'].cuda())
-                init_h = bool(sum(init_h_temp.data.cpu().numpy()))
             else:
                 inputs = Variable(samples['image'])
                 label = Variable(samples['label'])
-                init_h_temp = Variable(samples['startSeq'].cuda())
-                init_h = bool(sum(init_h_temp.data.numpy()))
 
             # zero the parameter gradients
             optimizer.zero_grad()
@@ -112,11 +111,17 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25, start_epo
             inputs /= 255
             
             # Sequence change
-            inputs = torch.squeeze(inputs, 0)
-            label = torch.squeeze(label, 0)
+            inputs = inputs.permute(1, 0, 2, 3, 4)
+            label = label.permute(1, 0, 2, 3)
             
-            outputs = myNet(inputs, init_h) 
-            loss = criterion(outputs, label)  
+            loss = 0
+            for i in range(inputs.shape[0]):
+                if i == 0:
+                    init_h = True
+                else:
+                    init_h = False
+                outputs = myNet(inputs[i], init_h) 
+                loss += criterion(outputs, label[i])  
 
             # backward + optimize only if in training phase
             loss.backward()
@@ -125,7 +130,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25, start_epo
             # statistics
             running_loss += loss.data
 
-        epoch_loss = running_loss / dataset_size 
+        epoch_loss = running_loss / (dataset_size * seq_size)
 
         print('{} Loss: {:.7f}'.format('train', epoch_loss)) 
 
@@ -139,7 +144,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25, start_epo
                     'optimizer': optimizer.state_dict(),
                     }, checkpoint_dir + 'checkpointAllEpochs.tar' ) 
 
-        if ((epoch + start_epoch + 1) % 10) == 0:
+        if ((epoch + start_epoch + 1) % 1) == 0:
             torch.save({
                         'epoch': epoch + start_epoch + 1,
                         'state_dict': model.state_dict(),
@@ -175,9 +180,10 @@ print (myNet)
 
 criterion = nn.CrossEntropyLoss()
 params = list(myNet.recurrent.parameters())
+params_feat = list(myNet.features.parameters())
 params_out = list(myNet.deconvFinal.parameters())
-optimizer_ft = optim.Adam(params + params_out)
-#optimizer_ft = optim.Adam(myNet.parameters())
+#optimizer_ft = optim.Adam(params + params_out)
+optimizer_ft = optim.Adam(myNet.parameters())
 exp_lr_scheduler = None
 
 if restore == False:

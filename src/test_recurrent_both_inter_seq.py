@@ -47,7 +47,7 @@ newx = 640 / 4 #480 / 4
 newy = 640 / 4
 
 # check if the checkpoints dir exist otherwise create it
-checkpoint_rec_dir = '../checkpoints_rec_1_lay_small_seq_scratch_' + str(newx) +  '_' + str(newy) + '/'
+checkpoint_rec_dir = '../checkpoints_rec_1_lay_small_seq_' + str(newx) +  '_' + str(newy) + '/'
 checkpoint_dir = '../checkpoints_small_' + str(newx) +  '_' + str(newy) + '/'
 
 data_transforms = transforms.Compose([Rescale((newx, newy)),
@@ -56,7 +56,7 @@ data_transforms = transforms.Compose([Rescale((newx, newy)),
 #checkpoint_dir = '../checkpoints_rec/'
 
 #data_transforms = transforms.Compose([ToTensor()])
-dataset = YCBSegmentation(root_dir = '/media/nigno/data/YCB/', 
+dataset = YCBSegmentationSeq(root_dir = '/media/nigno/data/YCB/', 
                           transform = data_transforms,
                           dset_type = 'val')
 
@@ -70,7 +70,7 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=1,
 #myNetRec = SegCNNRecSimple(n_rec_layers = 1, hidden_sizes = [128], kernel_sizes = [3])
 myNetRec = SegCNNRecSimple()
 myNetRec.train(False)
-cpName = checkpoint_rec_dir + 'checkpoint50.tar'
+cpName = checkpoint_rec_dir + 'checkpointAllEpochs.tar'
 if os.path.isfile(cpName):
     print("=> loading checkpoint '{}'".format(cpName))
     checkpoint = torch.load(cpName)
@@ -102,7 +102,7 @@ IoU_total2 = 0
 IoU_list1 = []
 IoU_list2 = []
 for data in dataloader:
-    if samples_count % 100000 == 0:
+    if samples_count % 50 == 0:
         init_h_seq = True
     else:
         init_h_seq = False

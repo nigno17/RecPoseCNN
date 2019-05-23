@@ -45,11 +45,13 @@ newx = 640 / 4 #480 / 4
 newy = 640 / 4
 
 # check if the checkpoints dir exist otherwise create it
-checkpoint_dir = '../checkpoints_small_' + str(newx) +  '_' + str(newy) + '/'
+checkpoint_dir = '../checkpoints_full_' + str(newx) +  '_' + str(newy) + '/'
 if not os.path.exists(checkpoint_dir):
     os.makedirs(checkpoint_dir)
 
 data_transforms = transforms.Compose([Rescale((newx, newy)),
+                                      #Normalize(mean=[0.485, 0.456, 0.406],
+                                      #          std=[0.229, 0.224, 0.225]),
                                       ToTensor()])
 #data_transforms = transforms.Compose([ToTensor()])
 train_dataset = YCBSegmentation(root_dir = '/media/nigno/data/YCB/', 
@@ -59,7 +61,7 @@ train_dataset = YCBSegmentation(root_dir = '/media/nigno/data/YCB/',
 print(len(train_dataset))
 train_size = len(train_dataset)
 
-dataloader_train = torch.utils.data.DataLoader(train_dataset, batch_size=150,
+dataloader_train = torch.utils.data.DataLoader(train_dataset, batch_size=50,
                                                shuffle=True, num_workers=6)
 
 
@@ -104,9 +106,6 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25, start_epo
             
             # forward
             inputs /= 255
-            # normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-            #                      std=[0.229, 0.224, 0.225])
-            # inputs = normalize(inputs)
             outputs = myNet(inputs)
             loss = criterion(outputs, label) 
 
@@ -148,7 +147,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25, start_epo
     return model
 
 
-myNet = SegCNNSimple()
+myNet = SegCNN()
 if torch.cuda.is_available():
     myNet = myNet.cuda()
 print (myNet)
