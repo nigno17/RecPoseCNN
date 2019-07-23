@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"name": "SSH FS - nino-wonderful",
+			"uri": "ssh://nino-wonderful/"
+		}
+	],
+	"settings": {}
+}
