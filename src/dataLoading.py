@@ -233,14 +233,19 @@ class YCBSegmentationSeq(Dataset):
             self.data_list = f.read().splitlines() 
         
         self.chunks = [self.data_list[x:x+self.seq_size] for x in range(0, len(self.data_list), self.seq_size)]
-        
-        for ch in self.chunks:
+
+        count_remove = 0
+        lenCh = len(self.chunks)
+        for indx in range(lenCh):
+            ch = self.chunks[indx - count_remove]
             if len(ch) == self.seq_size:
                 seq0 = list(map(int, ch[0].split('/')))
                 seq1 = list(map(int, ch[self.seq_size - 1].split('/')))
-                if seq0[0] == seq1[0]:
+                if seq0[0] is not seq1[0]:
+                    count_remove += 1
                     self.chunks.remove(ch)
             else:
+                count_remove += 1
                 self.chunks.remove(ch)
 
         self.transform = transform
