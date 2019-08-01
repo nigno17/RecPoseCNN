@@ -109,8 +109,10 @@ class SegCNNRec(torch.nn.Module):
             rec22 = self.recurrent22(self.hk22.output, self.hidden22)
             rec29 = self.recurrent29(self.hk29.output, self.hidden29)
 
-        self.hidden22 = [x.detach() for x in rec22]
-        self.hidden29 = [x.detach() for x in rec29]
+        #self.hidden22 = [x.detach() for x in rec22]
+        #self.hidden29 = [x.detach() for x in rec29]
+	self.hidden22 = rec22
+        self.hidden29 = rec29
 
         rec22out = self.relu(rec22[-1])
         rec29out = self.relu(rec29[-1])
@@ -160,7 +162,8 @@ class SegCNNRecSimple(torch.nn.Module):
         else:
             rec = self.recurrent(feat, self.hidden)
 
-        self.hidden = [x.detach() for x in rec]
+        #self.hidden = [x.detach() for x in rec]
+	self.hidden = rec
 
         recOut = self.relu(rec[-1])
 
