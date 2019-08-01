@@ -209,7 +209,8 @@ class SegCNNRecSimpleSum(torch.nn.Module):
         else:
             rec = self.recurrent(feat, self.hidden)
 
-        self.hidden = [x.detach() for x in rec]
+        #self.hidden = [x.detach() for x in rec]
+	self.hidden = rec
 
         recOut = self.relu(rec[-1])
 
