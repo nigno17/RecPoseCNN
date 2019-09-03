@@ -167,7 +167,7 @@ myNet.features = oldNet.features
 myNet.deconvFinal = oldNet.deconvFinal
 
 #for param in myNet.features.parameters():
-#    param.require_grad = False
+#    param.requires_grad = False
 
 if torch.cuda.is_available():
     myNet = myNet.cuda()
