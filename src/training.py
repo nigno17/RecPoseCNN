@@ -153,7 +153,7 @@ if torch.cuda.is_available():
 print (myNet)
 
 #for param in myNet.features.parameters():
-#    param.require_grad = False
+#    param.requires_grad = False
 
 criterion = nn.CrossEntropyLoss()
 #params = list(myNet.deconv22.parameters()) + list(myNet.deconv29.parameters()) + list(myNet.deconvFinal.parameters())
